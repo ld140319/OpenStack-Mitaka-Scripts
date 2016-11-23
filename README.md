@@ -25,7 +25,7 @@ HDD: +100GB
 ```
 
 ## Mô hình 2 node 
-![Mitaka-topo-2node.png](./images/Mitaka-topo-2node.png)
+![Mitaka-topo-2node.png](../images/Mitaka-topo-2node.png)
 
 ### Execute script
 - Install git package and dowload script 
@@ -34,8 +34,9 @@ su -
 apt-get update
 apt-get -y install git 
 
-git clone https://github.com/congto/OpenStack-Mitaka-Scripts.git
-mv /root/OpenStack-Mitaka-Scripts/OPS-Mitaka-OVS-Ubuntu/scripts/ /root/
+git clone -b Mitaka-2NET https://github.com/congto/OpenStack-Mitaka-Scripts.git
+
+mv /root/OpenStack-Mitaka-Scripts/OPS-OVS-Ubuntu-2NET/scripts/ /root/
 rm -rf OpenStack-Mitaka-Scripts/
 cd scripts/
 chmod +x *.sh
@@ -113,8 +114,9 @@ su -
 apt-get update
 apt-get -y install git 
 
-git clone https://github.com/congto/OpenStack-Mitaka-Scripts.git
-mv /root/OpenStack-Mitaka-Scripts/OPS-Mitaka-OVS-Ubuntu/scripts/ /root/
+git clone -b Mitaka-2NET https://github.com/congto/OpenStack-Mitaka-Scripts.git
+
+mv /root/OpenStack-Mitaka-Scripts/OPS-OVS-Ubuntu-2NET/scripts/ /root/
 rm -rf OpenStack-Mitaka-Scripts/
 cd scripts/
 chmod +x *.sh
