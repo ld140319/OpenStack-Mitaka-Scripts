@@ -100,7 +100,6 @@ ops_edit $nova_com keystone_authtoken password $NOVA_PASS
 ops_edit $nova_com vnc enabled True
 ops_edit $nova_com vnc vncserver_listen 0.0.0.0
 ops_edit $nova_com vnc vncserver_proxyclient_address \$my_ip
-ops_edit $nova_com vnc vncserver_proxyclient_address \$my_ip
 ops_edit $nova_com vnc \
     novncproxy_base_url http://$CTL_EXT_IP:6080/vnc_auto.html
 
@@ -133,7 +132,7 @@ rm /var/lib/nova/nova.sqlite
 echocolor "Install openvswitch-agent (neutron) on COMPUTE NODE"
 sleep 5
 
-apt-get -y install  neutron-plugin-openvswitch-agent 
+apt-get -y install  neutron-plugin-openvswitch-agent neutron-common neutron-plugin-ml2 ipset
 
 
 echocolor "Config file neutron.conf"
@@ -144,6 +143,7 @@ test -f $neutron_com.orig || cp $neutron_com $neutron_com.orig
 ops_edit $neutron_com DEFAULT core_plugin ml2
 ops_edit $neutron_com DEFAULT rpc_backend rabbit
 ops_edit $neutron_com DEFAULT auth_strategy keystone
+ops_edit $neutron_com DEFAULT service_plugins router
 
 ## [keystone_authtoken] section
 ops_edit $neutron_com keystone_authtoken auth_uri http://$CTL_MGNT_IP:5000
@@ -165,27 +165,101 @@ ops_edit $neutron_com oslo_messaging_rabbit rabbit_host $CTL_MGNT_IP
 ops_edit $neutron_com oslo_messaging_rabbit rabbit_userid openstack
 ops_edit $neutron_com oslo_messaging_rabbit rabbit_password $RABBIT_PASS
 
+######## Backup configuration of ML2 ##################"
+echocolor "Configuring ML2"
+sleep 7
+
+ml2_com=/etc/neutron/plugins/ml2/ml2_conf.ini
+test -f $ml2_com.orig || cp $ml2_com $ml2_com.orig
+
+## [ml2] section
+ops_edit $ml2_com ml2 type_drivers flat,vlan,vxlan,gre
+ops_edit $ml2_com ml2 tenant_network_types vlan,gre,vxlan
+ops_edit $ml2_com ml2 mechanism_drivers openvswitch,l2population
+ops_edit $ml2_com ml2 extension_drivers port_security
+
+
+## [ml2_type_flat] section
+ops_edit $ml2_com ml2_type_flat flat_networks external
+
+## [ml2_type_gre] section
+ops_edit $ml2_com ml2_type_gre tunnel_id_ranges 300:400
+
+## [ml2_type_vxlan] section
+# ops_edit $ml2_com ml2_type_vxlan vni_ranges 201:300
+
+
+## [ml2_type_vlan] section
+ops_edit $ml2_com ml2_type_vlan network_vlan_ranges external
+
+## [securitygroup] section
+ops_edit $ml2_com securitygroup enable_ipset True
+ops_edit $ml2_com securitygroup firewall_driver \
+    neutron.agent.linux.iptables_firewall.OVSHybridIptablesFirewallDriver
+
+ops_edit $ml2_com securitygroup enable_security_group True
+    
 
 echocolor "Configuring openvswitch_agent"
 sleep 5
-########
 ovsfile=/etc/neutron/plugins/ml2/openvswitch_agent.ini
 test -f $ovsfile.orig || cp $ovsfile $ovsfile.orig
 
-# [agent] section
-ops_edit $ovsfile agent tunnel_types gre,vxlan
+## [agent] section
+ops_edit $ovsfile agent tunnel_types gre
 ops_edit $ovsfile agent l2_population True
-
-
-## [securitygroup] section
-ops_edit $ovsfile securitygroup firewall_driver \
-     neutron.agent.linux.iptables_firewall.OVSHybridIptablesFirewallDriver
 
 ## [ovs] section
 ops_edit $ovsfile ovs local_ip $COM2_MGNT_IP
+ops_edit $ovsfile ovs bridge_mappings external:br-ex
+
+# [securitygroup] section
+ops_edit $ovsfile securitygroup firewall_driver \
+   neutron.agent.linux.iptables_firewall.OVSHybridIptablesFirewallDriver
 
 echocolor "Reset service nova-compute,openvswitch_agent"
 sleep 5
-service nova-compute restart
 service neutron-openvswitch-agent restart
 
+echocolor "Config IP address for br-ex"
+ifaces=/etc/network/interfaces
+test -f $ifaces.orig || cp $ifaces $ifaces.orig
+rm $ifaces
+cat << EOF > $ifaces
+# The loopback network interface
+auto lo
+iface lo inet loopback
+
+# The primary network interface
+auto br-ex
+iface br-ex inet static
+address $COM2_EXT_IP
+netmask $NETMASK_ADD_EXT
+gateway $GATEWAY_IP_EXT
+dns-nameservers 8.8.8.8
+
+auto eth1
+iface eth1 inet manual
+   up ifconfig \$IFACE 0.0.0.0 up
+   up ip link set \$IFACE promisc on
+   down ip link set \$IFACE promisc off
+   down ifconfig \$IFACE down
+
+auto eth0
+iface eth0 inet static
+address $COM2_MGNT_IP
+netmask $NETMASK_ADD_MGNT
+EOF
+
+
+echocolor "Config br-int and br-ex for OpenvSwitch"
+sleep 5
+# ovs-vsctl add-br br-int
+ovs-vsctl add-br br-ex
+ovs-vsctl add-port br-ex eth1
+
+echocolor "Finished install NEUTRON on CONTROLLER"
+
+sleep 5
+echocolor "Reboot SERVER"
+init 6

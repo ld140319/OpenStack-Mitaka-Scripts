@@ -100,7 +100,6 @@ ops_edit $nova_com keystone_authtoken password $NOVA_PASS
 ops_edit $nova_com vnc enabled True
 ops_edit $nova_com vnc vncserver_listen 0.0.0.0
 ops_edit $nova_com vnc vncserver_proxyclient_address \$my_ip
-ops_edit $nova_com vnc vncserver_proxyclient_address \$my_ip
 ops_edit $nova_com vnc \
     novncproxy_base_url http://$CTL_EXT_IP:6080/vnc_auto.html
 
